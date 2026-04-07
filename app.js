@@ -7,9 +7,7 @@ const CATEGORY_OPTIONS = [
   'Finance',
   'Planning',
   'Partnership',
-  'Training',
-  'Meeting',
-  'Event',
+  'Capacity Building',
   'Field Activities',
   'M&E',
   'Reporting',
@@ -376,7 +374,7 @@ async function saveTask(event) {
   setSyncStatus('Saving task to Google Sheets...');
 
   try {
-    const response = await apiPost(action, payload);
+    const response = await apiWrite(action, payload);
     if (!response.success) throw new Error(response.message || 'Save failed');
     closeTaskModal();
     showToast(payload.id ? 'Task updated successfully' : 'Task added successfully', 'success');
@@ -401,7 +399,7 @@ async function deleteTask(taskId) {
   setSyncStatus('Deleting task from Google Sheets...');
 
   try {
-    const response = await apiPost('deleteTask', { id: taskId });
+    const response = await apiWrite('deleteTask', { id: taskId });
     if (!response.success) throw new Error(response.message || 'Delete failed');
     showToast('Task deleted successfully', 'success');
     await loadTasks();
@@ -455,23 +453,34 @@ async function apiGet(action) {
   url.searchParams.set('action', action);
   url.searchParams.set('_ts', String(Date.now()));
 
-  const response = await fetch(url.toString(), { method: 'GET' });
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    redirect: 'follow'
+  });
+
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
-async function apiPost(action, data) {
-  const response = await fetch(window.APP_CONFIG.API_BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, data })
+async function apiWrite(action, data) {
+  const url = new URL(window.APP_CONFIG.API_BASE_URL);
+  url.searchParams.set('action', action);
+  url.searchParams.set('payload', JSON.stringify(data || {}));
+  url.searchParams.set('_ts', String(Date.now()));
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    redirect: 'follow'
   });
+
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
 function isApiConfigured() {
-  return window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL && !window.APP_CONFIG.API_BASE_URL.includes('PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE');
+  return window.APP_CONFIG
+    && window.APP_CONFIG.API_BASE_URL
+    && !window.APP_CONFIG.API_BASE_URL.includes('PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE');
 }
 
 function setSyncStatus(message) {
@@ -562,26 +571,29 @@ function formatDateRange(start, end) {
   const startText = formatDate(start);
   const endText = formatDate(end);
   if (startText === '—' && endText === '—') return '—';
-  if (startText === '—') return `Due: ${endText}`;
-  if (endText === '—') return `From: ${startText}`;
+  if (startText === '—') return endText;
+  if (endText === '—') return startText;
   return `${startText} → ${endText}`;
 }
 
 function getInitials(name) {
-  return name
-    .split(/\s+/)
+  return String(name || '')
+    .split(' ')
     .filter(Boolean)
     .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() || '')
-    .join('') || 'NA';
+    .map(part => part.charAt(0).toUpperCase())
+    .join('') || 'U';
 }
 
 function escapeHtml(value) {
-  const div = document.createElement('div');
-  div.textContent = String(value ?? '');
-  return div.innerHTML;
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function escapeAttribute(value) {
-  return String(value ?? '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return escapeHtml(value).replace(/`/g, '&#96;');
 }
