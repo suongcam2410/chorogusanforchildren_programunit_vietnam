@@ -1,8 +1,12 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>ChorogUsan Working Plan Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +19,7 @@
     <div class="login-card">
       <img src="assets/logo.png" alt="ChorogUsan for Children Vietnam" class="login-logo">
       <h1>Working Plan Dashboard</h1>
-      <p>Sign in to manage tasks on GitHub Pages</p>
+      <p>GitHub Pages version connected to Google Sheets</p>
 
       <form id="loginForm" class="login-form">
         <div class="form-group">
@@ -34,6 +38,13 @@
         Username: <code>admin</code><br>
         Password: <code>88888888</code>
       </div>
+
+      <div class="login-actions">
+        <button id="openSettingsFromLogin" type="button" class="btn btn-outline btn-block">
+          <span class="material-icons">settings</span>
+          API Settings
+        </button>
+      </div>
     </div>
   </div>
 
@@ -48,6 +59,10 @@
       </div>
 
       <div class="header-actions">
+        <button id="openSettingsBtn" class="btn btn-outline btn-sm">
+          <span class="material-icons">settings</span>
+          API Settings
+        </button>
         <div class="session-pill">
           <span class="material-icons">verified_user</span>
           <span id="currentUserLabel">admin</span>
@@ -71,6 +86,27 @@
     </nav>
 
     <main class="container">
+      <div id="apiWarning" class="alert-banner hidden"></div>
+
+      <section id="setupPanel" class="setup-panel hidden">
+        <div class="setup-card">
+          <div>
+            <h2>Connect to Google Sheets</h2>
+            <p>This GitHub Pages version needs your deployed Google Apps Script <strong>/exec</strong> URL before it can load or save tasks.</p>
+          </div>
+          <div class="setup-actions">
+            <button id="openSettingsBtnInline" class="btn btn-primary btn-sm">
+              <span class="material-icons">settings</span>
+              Configure API URL
+            </button>
+            <button id="testApiBtn" class="btn btn-outline btn-sm">
+              <span class="material-icons">link</span>
+              Test Connection
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section id="dashboardTab" class="tab-panel active">
         <div class="kpi-grid">
           <article class="kpi-card primary">
@@ -117,15 +153,47 @@
               </div>
               <div class="field-inline">
                 <label for="filterMonth">Month</label>
-                <select id="filterMonth"></select>
+                <select id="filterMonth">
+                  <option value="">All months</option>
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
               </div>
               <div class="field-inline">
                 <label for="filterStatus">Status</label>
-                <select id="filterStatus"></select>
+                <select id="filterStatus">
+                  <option value="">All status</option>
+                  <option value="Not Started">Not Started</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="On Hold">On Hold</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
               </div>
               <div class="field-inline">
                 <label for="filterCategory">Category</label>
-                <select id="filterCategory"></select>
+                <select id="filterCategory">
+                  <option value="">All categories</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Planning">Planning</option>
+                  <option value="Partnership">Partnership</option>
+                  <option value="Capacity Building">Capacity Building</option>
+                  <option value="Field Activities">Field Activities</option>
+                  <option value="M&amp;E">M&amp;E</option>
+                  <option value="Reporting">Reporting</option>
+                  <option value="Administration">Administration</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
             </div>
 
@@ -229,7 +297,18 @@
           </div>
           <div class="form-group">
             <label for="taskCategory">Category</label>
-            <select id="taskCategory"></select>
+            <select id="taskCategory">
+              <option value="">Select category</option>
+              <option value="Finance">Finance</option>
+              <option value="Planning">Planning</option>
+              <option value="Partnership">Partnership</option>
+              <option value="Capacity Building">Capacity Building</option>
+              <option value="Field Activities">Field Activities</option>
+              <option value="M&amp;E">M&amp;E</option>
+              <option value="Reporting">Reporting</option>
+              <option value="Administration">Administration</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
         </div>
 
@@ -269,11 +348,22 @@
         <div class="form-row two-col">
           <div class="form-group">
             <label for="taskStatus">Status</label>
-            <select id="taskStatus"></select>
+            <select id="taskStatus">
+              <option value="Not Started" selected>Not Started</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
           </div>
           <div class="form-group">
             <label for="taskRisk">Risk Level</label>
-            <select id="taskRisk"></select>
+            <select id="taskRisk">
+              <option value="">Select risk</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
           </div>
         </div>
 
@@ -290,6 +380,36 @@
     </div>
   </div>
 
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <div>
+          <h3>API Settings</h3>
+          <p>Paste your deployed Google Apps Script Web App URL</p>
+        </div>
+        <button id="closeSettingsModalBtn" class="icon-btn" aria-label="Close">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <form id="settingsForm" class="modal-form">
+        <div class="form-group">
+          <label for="apiBaseUrlInput">Apps Script Web App URL</label>
+          <input id="apiBaseUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+
+        <div class="settings-tip">
+          Use the <strong>/exec</strong> URL from Apps Script deployment, not the <strong>/dev</strong> URL. You only need to save this once in your browser.
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="clearSettingsBtn" class="btn btn-outline">Clear</button>
+          <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loading-box">
       <div class="spinner"></div>
@@ -299,7 +419,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=20260408-2"></script>
+  <script src="app.js?v=20260408-2"></script>
 </body>
 </html>
