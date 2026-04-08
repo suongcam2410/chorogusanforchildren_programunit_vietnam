@@ -25,45 +25,57 @@ const state = {
   currentUser: 'admin'
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  bootstrapApiUrlFromQuery();
-  bindEvents();
-  setupStaticOptions();
-  hydrateSettingsField();
-  restoreSession();
-  refreshConnectionUi();
-});
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+function initializeApp() {
+  safeRun(bootstrapApiUrlFromQuery, 'bootstrapApiUrlFromQuery');
+  safeRun(bindEvents, 'bindEvents');
+  safeRun(setupStaticOptions, 'setupStaticOptions');
+  safeRun(hydrateSettingsField, 'hydrateSettingsField');
+  safeRun(restoreSession, 'restoreSession');
+  safeRun(refreshConnectionUi, 'refreshConnectionUi');
+}
+
+function safeRun(fn, label) {
+  try {
+    fn();
+  } catch (error) {
+    console.error(`Initialization error in ${label}:`, error);
+  }
+}
 
 function bindEvents() {
-  document.getElementById('loginForm').addEventListener('submit', handleLogin);
-  document.getElementById('logoutBtn').addEventListener('click', logout);
-  document.getElementById('addTaskBtn').addEventListener('click', openAddTaskModal);
-  document.getElementById('addTaskBtnTop').addEventListener('click', openAddTaskModal);
-  document.getElementById('closeTaskModalBtn').addEventListener('click', closeTaskModal);
-  document.getElementById('cancelTaskBtn').addEventListener('click', closeTaskModal);
-  document.getElementById('taskForm').addEventListener('submit', saveTask);
-  document.getElementById('refreshBtn').addEventListener('click', loadTasks);
-  document.getElementById('exportBtn').addEventListener('click', exportTasks);
+  addListener('loginForm', 'submit', handleLogin);
+  addListener('logoutBtn', 'click', logout);
+  addListener('addTaskBtn', 'click', openAddTaskModal);
+  addListener('addTaskBtnTop', 'click', openAddTaskModal);
+  addListener('closeTaskModalBtn', 'click', closeTaskModal);
+  addListener('cancelTaskBtn', 'click', closeTaskModal);
+  addListener('taskForm', 'submit', saveTask);
+  addListener('refreshBtn', 'click', loadTasks);
+  addListener('exportBtn', 'click', exportTasks);
 
-  document.getElementById('openSettingsBtn').addEventListener('click', openSettingsModal);
-  document.getElementById('openSettingsFromLogin').addEventListener('click', openSettingsModal);
-  document.getElementById('openSettingsBtnInline').addEventListener('click', openSettingsModal);
-  document.getElementById('testApiBtn').addEventListener('click', testConnection);
-  document.getElementById('closeSettingsModalBtn').addEventListener('click', closeSettingsModal);
-  document.getElementById('settingsForm').addEventListener('submit', saveSettings);
-  document.getElementById('clearSettingsBtn').addEventListener('click', clearSettings);
+  addListener('openSettingsBtn', 'click', openSettingsModal);
+  addListener('openSettingsFromLogin', 'click', openSettingsModal);
+  addListener('openSettingsBtnInline', 'click', openSettingsModal);
+  addListener('testApiBtn', 'click', testConnection);
+  addListener('closeSettingsModalBtn', 'click', closeSettingsModal);
+  addListener('settingsForm', 'submit', saveSettings);
+  addListener('clearSettingsBtn', 'click', clearSettings);
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
   ['filterSearch', 'filterMonth', 'filterStatus', 'filterCategory'].forEach(id => {
-    document.getElementById(id).addEventListener('input', applyFilters);
-    document.getElementById(id).addEventListener('change', applyFilters);
+    addListener(id, 'input', applyFilters);
+    addListener(id, 'change', applyFilters);
   });
 
   ['taskModal', 'settingsModal'].forEach(modalId => {
-    document.getElementById(modalId).addEventListener('click', event => {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.addEventListener('click', event => {
       if (event.target.id === modalId) {
         if (modalId === 'taskModal') closeTaskModal();
         if (modalId === 'settingsModal') closeSettingsModal();
@@ -72,26 +84,39 @@ function bindEvents() {
   });
 }
 
+function addListener(id, eventName, handler) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  element.addEventListener(eventName, handler);
+}
+
 function setupStaticOptions() {
-  populateSelect(document.getElementById('taskCategory'), CATEGORY_OPTIONS, 'Select category');
-  populateSelect(document.getElementById('filterCategory'), CATEGORY_OPTIONS, 'All categories');
-  populateSelect(document.getElementById('taskStatus'), STATUS_OPTIONS.filter(Boolean), null, 'Not Started');
-  populateSelect(document.getElementById('filterStatus'), STATUS_OPTIONS, 'All status');
-  populateSelect(document.getElementById('taskRisk'), RISK_OPTIONS, 'Select risk');
+  ensureSelectOptions(document.getElementById('taskCategory'), CATEGORY_OPTIONS, 'Select category');
+  ensureSelectOptions(document.getElementById('filterCategory'), CATEGORY_OPTIONS, 'All categories');
+  ensureSelectOptions(document.getElementById('taskStatus'), STATUS_OPTIONS.filter(Boolean), null, 'Not Started');
+  ensureSelectOptions(document.getElementById('filterStatus'), STATUS_OPTIONS, 'All status');
+  ensureSelectOptions(document.getElementById('taskRisk'), RISK_OPTIONS, 'Select risk');
 
   const monthSelect = document.getElementById('filterMonth');
-  monthSelect.innerHTML = '<option value="">All months</option>';
-  for (let month = 1; month <= 12; month += 1) {
-    const date = new Date(2026, month - 1, 1);
-    const option = document.createElement('option');
-    option.value = String(month);
-    option.textContent = date.toLocaleString('en-US', { month: 'long' });
-    monthSelect.appendChild(option);
+  if (monthSelect && !monthSelect.options.length) {
+    monthSelect.innerHTML = '<option value="">All months</option>';
+    for (let month = 1; month <= 12; month += 1) {
+      const date = new Date(2026, month - 1, 1);
+      const option = document.createElement('option');
+      option.value = String(month);
+      option.textContent = date.toLocaleString('en-US', { month: 'long' });
+      monthSelect.appendChild(option);
+    }
   }
 }
 
-function populateSelect(select, values, placeholder = null, defaultValue = '') {
-  select.innerHTML = '';
+function ensureSelectOptions(select, values, placeholder = null, defaultValue = '') {
+  if (!select) return;
+  if (select.options.length > 0) {
+    if (defaultValue && !select.value) select.value = defaultValue;
+    return;
+  }
+
   if (placeholder !== null) {
     const placeholderOption = document.createElement('option');
     placeholderOption.value = '';
@@ -488,6 +513,7 @@ function renderUpcoming() {
 }
 
 function openAddTaskModal() {
+  setupStaticOptions();
   if (!isApiConfigured()) {
     openSettingsModal();
     showToast('Please save your Apps Script /exec URL first', 'warning');
@@ -506,6 +532,7 @@ function closeTaskModal() {
 }
 
 function editTask(taskId) {
+  setupStaticOptions();
   const task = state.tasks.find(item => item.id === taskId);
   if (!task) {
     showToast('Task not found', 'error');
@@ -577,7 +604,7 @@ async function saveTask(event) {
   } catch (error) {
     console.error(error);
     setSyncStatus('Save failed');
-    showToast(error.message || 'Unable to save task', 'error');
+    showToast(error.message || 'Unable to save task. Also check that your Apps Script Web App access is set to Anyone.', 'error');
   } finally {
     showLoading(false);
   }
