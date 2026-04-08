@@ -1,6 +1,7 @@
 const LOGIN_USERNAME = 'admin';
 const LOGIN_PASSWORD = '88888888';
 const SESSION_KEY = 'chorogusan_dashboard_session';
+const API_URL_KEY = 'chorogusan_dashboard_api_url';
 
 const CATEGORY_OPTIONS = [
   '',
@@ -21,14 +22,16 @@ const RISK_OPTIONS = ['', 'Low', 'Medium', 'High'];
 const state = {
   tasks: [],
   filteredTasks: [],
-  editingTaskId: '',
   currentUser: 'admin'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  bootstrapApiUrlFromQuery();
   bindEvents();
   setupStaticOptions();
+  hydrateSettingsField();
   restoreSession();
+  refreshConnectionUi();
 });
 
 function bindEvents() {
@@ -42,6 +45,14 @@ function bindEvents() {
   document.getElementById('refreshBtn').addEventListener('click', loadTasks);
   document.getElementById('exportBtn').addEventListener('click', exportTasks);
 
+  document.getElementById('openSettingsBtn').addEventListener('click', openSettingsModal);
+  document.getElementById('openSettingsFromLogin').addEventListener('click', openSettingsModal);
+  document.getElementById('openSettingsBtnInline').addEventListener('click', openSettingsModal);
+  document.getElementById('testApiBtn').addEventListener('click', testConnection);
+  document.getElementById('closeSettingsModalBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('settingsForm').addEventListener('submit', saveSettings);
+  document.getElementById('clearSettingsBtn').addEventListener('click', clearSettings);
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
@@ -51,8 +62,13 @@ function bindEvents() {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
 
-  document.getElementById('taskModal').addEventListener('click', (event) => {
-    if (event.target.id === 'taskModal') closeTaskModal();
+  ['taskModal', 'settingsModal'].forEach(modalId => {
+    document.getElementById(modalId).addEventListener('click', event => {
+      if (event.target.id === modalId) {
+        if (modalId === 'taskModal') closeTaskModal();
+        if (modalId === 'settingsModal') closeSettingsModal();
+      }
+    });
   });
 }
 
@@ -94,11 +110,31 @@ function populateSelect(select, values, placeholder = null, defaultValue = '') {
   if (defaultValue) select.value = defaultValue;
 }
 
+function bootstrapApiUrlFromQuery() {
+  try {
+    const url = new URL(window.location.href);
+    const api = (url.searchParams.get('api') || '').trim();
+    if (api && isValidExecUrl(api)) {
+      localStorage.setItem(API_URL_KEY, api);
+      url.searchParams.delete('api');
+      window.history.replaceState({}, '', url.toString());
+    }
+  } catch (error) {
+    console.warn('Unable to parse page URL', error);
+  }
+}
+
 function restoreSession() {
   const saved = localStorage.getItem(SESSION_KEY);
-  if (saved === 'admin') {
+  if (saved === LOGIN_USERNAME) {
+    state.currentUser = saved;
     showApp();
-    loadTasks();
+    if (isApiConfigured()) {
+      loadTasks();
+    } else {
+      setSyncStatus('Setup required: save your Apps Script /exec URL');
+      updateLastUpdated(null);
+    }
   }
 }
 
@@ -111,8 +147,15 @@ function handleLogin(event) {
     localStorage.setItem(SESSION_KEY, username);
     state.currentUser = username;
     showApp();
-    loadTasks();
-    showToast('Login successful', 'success');
+    refreshConnectionUi();
+    if (isApiConfigured()) {
+      loadTasks();
+    } else {
+      openSettingsModal();
+      setSyncStatus('Setup required: save your Apps Script /exec URL');
+      updateLastUpdated(null);
+      showToast('Please save your Apps Script /exec URL first', 'warning');
+    }
     return;
   }
 
@@ -132,10 +175,151 @@ function logout() {
   document.getElementById('loginForm').reset();
 }
 
+function normalizeExecUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function getApiBaseUrl() {
+  const localValue = normalizeExecUrl(localStorage.getItem(API_URL_KEY) || '');
+  const configValue = normalizeExecUrl(window.APP_CONFIG?.API_BASE_URL || '');
+
+  if (isValidExecUrl(localValue)) return localValue;
+  if (isValidExecUrl(configValue)) return configValue;
+  return localValue || configValue;
+}
+
+function hydrateSettingsField() {
+  const value = getApiBaseUrl();
+  document.getElementById('apiBaseUrlInput').value = value;
+
+  const localValue = normalizeExecUrl(localStorage.getItem(API_URL_KEY) || '');
+  if (!isValidExecUrl(localValue) && isValidExecUrl(value)) {
+    localStorage.setItem(API_URL_KEY, value);
+  }
+}
+
+function isValidExecUrl(value) {
+  const normalized = normalizeExecUrl(value);
+  if (!normalized || !/^https:\/\//i.test(normalized)) return false;
+  return /\/exec(?:$|[?#])/i.test(normalized);
+}
+
+function isApiConfigured() {
+  return isValidExecUrl(getApiBaseUrl());
+}
+
+function refreshConnectionUi() {
+  updateApiWarning();
+  updateSetupPanel();
+  updateActionAvailability();
+}
+
+function updateApiWarning() {
+  const warning = document.getElementById('apiWarning');
+  if (isApiConfigured()) {
+    warning.classList.add('hidden');
+    warning.innerHTML = '';
+    return;
+  }
+
+  warning.classList.remove('hidden');
+  warning.innerHTML = `
+    <div>
+      <strong>API URL is not configured.</strong>
+      This page cannot read or write Google Sheets until you save your Apps Script <strong>/exec</strong> URL.
+    </div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="openSettingsModal()">
+      <span class="material-icons">settings</span>
+      Open API Settings
+    </button>
+  `;
+}
+
+function updateSetupPanel() {
+  const setupPanel = document.getElementById('setupPanel');
+  setupPanel.classList.toggle('hidden', isApiConfigured());
+}
+
+function updateActionAvailability() {
+  const disabled = !isApiConfigured();
+  ['addTaskBtn', 'addTaskBtnTop', 'refreshBtn', 'testApiBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled && id !== 'testApiBtn';
+  });
+}
+
+function openSettingsModal() {
+  hydrateSettingsField();
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function saveSettings(event) {
+  event.preventDefault();
+  const value = normalizeExecUrl(document.getElementById('apiBaseUrlInput').value);
+  if (!value) {
+    showToast('Please paste your Apps Script Web App /exec URL', 'error');
+    return;
+  }
+  if (!isValidExecUrl(value)) {
+    showToast('Please enter a valid Apps Script /exec URL', 'error');
+    return;
+  }
+
+  localStorage.setItem(API_URL_KEY, value);
+  refreshConnectionUi();
+  closeSettingsModal();
+  setSyncStatus('API URL saved');
+  showToast('API URL saved', 'success');
+
+  if (!document.getElementById('appShell').classList.contains('hidden')) {
+    loadTasks();
+  }
+}
+
+function clearSettings() {
+  localStorage.removeItem(API_URL_KEY);
+  hydrateSettingsField();
+  refreshConnectionUi();
+  setSyncStatus(isApiConfigured() ? 'Using API URL from config.js' : 'API URL cleared');
+  updateLastUpdated(null);
+  showToast(isApiConfigured() ? 'Saved API URL cleared. Falling back to config.js' : 'Saved API URL cleared', 'warning');
+}
+
+async function testConnection() {
+  const apiUrl = getApiBaseUrl();
+  if (!isValidExecUrl(apiUrl)) {
+    openSettingsModal();
+    showToast('Please save a valid Apps Script /exec URL first', 'warning');
+    return;
+  }
+
+  showLoading(true);
+  setSyncStatus('Testing Apps Script connection...');
+
+  try {
+    const response = await apiRequest('ping');
+    if (!response.success) throw new Error(response.message || 'Connection failed');
+    setSyncStatus('Apps Script connection is working');
+    updateLastUpdated(new Date());
+    showToast('Connection successful', 'success');
+  } catch (error) {
+    console.error(error);
+    setSyncStatus('Connection test failed');
+    showToast(error.message || 'Cannot connect to Apps Script', 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
 async function loadTasks() {
+  refreshConnectionUi();
   if (!isApiConfigured()) {
-    showToast('Please update config.js with your Apps Script Web App URL', 'error');
-    setSyncStatus('API URL is not configured');
+    setSyncStatus('Setup required: save your Apps Script /exec URL');
+    updateLastUpdated(null);
     return;
   }
 
@@ -143,12 +327,12 @@ async function loadTasks() {
   setSyncStatus('Loading data from Google Sheets...');
 
   try {
-    const response = await apiGet('getTasks');
+    const response = await apiRequest('getTasks');
     if (!response.success) throw new Error(response.message || 'Unable to load tasks');
 
     state.tasks = Array.isArray(response.tasks) ? response.tasks : [];
     applyFilters();
-    updateLastUpdated();
+    updateLastUpdated(new Date());
     setSyncStatus(`Synced with Google Sheets (${state.tasks.length} tasks)`);
   } catch (error) {
     console.error(error);
@@ -211,7 +395,7 @@ function renderDashboardTable() {
   const tasks = [...state.filteredTasks].sort(sortByClosestDeadline).slice(0, 10);
 
   if (!tasks.length) {
-    tbody.innerHTML = emptyRow(7, 'No matching tasks found');
+    tbody.innerHTML = emptyRow(7, isApiConfigured() ? 'No matching tasks found' : 'Configure API URL to load tasks');
     return;
   }
 
@@ -243,7 +427,7 @@ function renderAllTasksTable() {
   const tasks = [...state.filteredTasks].sort(sortByClosestDeadline);
 
   if (!tasks.length) {
-    tbody.innerHTML = emptyRow(11, 'No tasks found');
+    tbody.innerHTML = emptyRow(11, isApiConfigured() ? 'No tasks found' : 'Configure API URL to load tasks');
     return;
   }
 
@@ -284,7 +468,7 @@ function renderUpcoming() {
     .slice(0, 6);
 
   if (!upcoming.length) {
-    container.innerHTML = '<div class="empty-state">No upcoming deadlines</div>';
+    container.innerHTML = `<div class="empty-state">${isApiConfigured() ? 'No upcoming deadlines' : 'Configure API URL to load tasks'}</div>`;
     return;
   }
 
@@ -304,7 +488,12 @@ function renderUpcoming() {
 }
 
 function openAddTaskModal() {
-  state.editingTaskId = '';
+  if (!isApiConfigured()) {
+    openSettingsModal();
+    showToast('Please save your Apps Script /exec URL first', 'warning');
+    return;
+  }
+
   document.getElementById('taskModalTitle').textContent = 'Add New Task';
   document.getElementById('taskForm').reset();
   document.getElementById('taskId').value = '';
@@ -323,7 +512,6 @@ function editTask(taskId) {
     return;
   }
 
-  state.editingTaskId = taskId;
   document.getElementById('taskModalTitle').textContent = 'Edit Task';
   document.getElementById('taskId').value = task.id || '';
   document.getElementById('taskName').value = task.taskName || '';
@@ -342,6 +530,13 @@ function editTask(taskId) {
 
 async function saveTask(event) {
   event.preventDefault();
+  refreshConnectionUi();
+
+  if (!isApiConfigured()) {
+    showToast('Please save your Apps Script /exec URL in API Settings first', 'error');
+    openSettingsModal();
+    return;
+  }
 
   const payload = {
     id: document.getElementById('taskId').value.trim(),
@@ -369,12 +564,12 @@ async function saveTask(event) {
     return;
   }
 
-  const action = payload.id ? 'updateTask' : 'addTask';
   showLoading(true);
   setSyncStatus('Saving task to Google Sheets...');
 
   try {
-    const response = await apiWrite(action, payload);
+    const action = payload.id ? 'updateTask' : 'addTask';
+    const response = await apiRequest(action, payload);
     if (!response.success) throw new Error(response.message || 'Save failed');
     closeTaskModal();
     showToast(payload.id ? 'Task updated successfully' : 'Task added successfully', 'success');
@@ -395,11 +590,18 @@ function confirmDeleteTask(taskId) {
 }
 
 async function deleteTask(taskId) {
+  refreshConnectionUi();
+  if (!isApiConfigured()) {
+    showToast('Please save your Apps Script /exec URL in API Settings first', 'error');
+    openSettingsModal();
+    return;
+  }
+
   showLoading(true);
   setSyncStatus('Deleting task from Google Sheets...');
 
   try {
-    const response = await apiWrite('deleteTask', { id: taskId });
+    const response = await apiRequest('deleteTask', { id: taskId });
     if (!response.success) throw new Error(response.message || 'Delete failed');
     showToast('Task deleted successfully', 'success');
     await loadTasks();
@@ -448,47 +650,74 @@ function exportTasks() {
   showToast('CSV exported', 'success');
 }
 
-async function apiGet(action) {
-  const url = new URL(window.APP_CONFIG.API_BASE_URL);
-  url.searchParams.set('action', action);
-  url.searchParams.set('_ts', String(Date.now()));
+function apiRequest(action, payload = null) {
+  return new Promise((resolve, reject) => {
+    const apiUrl = getApiBaseUrl();
+    if (!isValidExecUrl(apiUrl)) {
+      reject(new Error('Apps Script /exec URL is missing or invalid'));
+      return;
+    }
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    redirect: 'follow'
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(apiUrl);
+    } catch (error) {
+      reject(new Error('Apps Script /exec URL is invalid'));
+      return;
+    }
+
+    const callbackName = `jsonpCallback_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    parsedUrl.searchParams.set('action', action);
+    parsedUrl.searchParams.set('_ts', String(Date.now()));
+    parsedUrl.searchParams.set('callback', callbackName);
+    if (payload) parsedUrl.searchParams.set('payload', JSON.stringify(payload));
+
+    const script = document.createElement('script');
+    let settled = false;
+    const cleanup = () => {
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    };
+
+    const fail = message => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(message));
+    };
+
+    const timer = setTimeout(() => {
+      fail('Connection timeout. Please check the Apps Script /exec URL and redeploy the web app with access set to Anyone.');
+    }, 20000);
+
+    window[callbackName] = response => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(response || {});
+    };
+
+    script.onerror = () => {
+      fail('Cannot connect to Apps Script. The current web app URL is redirecting to Google sign-in or is not public. Redeploy Apps Script as: Execute as Me, Who has access: Anyone.');
+    };
+
+    script.src = parsedUrl.toString();
+    document.body.appendChild(script);
   });
-
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-
-async function apiWrite(action, data) {
-  const url = new URL(window.APP_CONFIG.API_BASE_URL);
-  url.searchParams.set('action', action);
-  url.searchParams.set('payload', JSON.stringify(data || {}));
-  url.searchParams.set('_ts', String(Date.now()));
-
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    redirect: 'follow'
-  });
-
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-
-function isApiConfigured() {
-  return window.APP_CONFIG
-    && window.APP_CONFIG.API_BASE_URL
-    && !window.APP_CONFIG.API_BASE_URL.includes('PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE');
 }
 
 function setSyncStatus(message) {
   document.getElementById('syncStatus').textContent = message;
 }
 
-function updateLastUpdated() {
-  const now = new Date();
+function updateLastUpdated(dateValue = new Date()) {
+  if (!dateValue) {
+    document.getElementById('lastUpdated').textContent = 'Last updated: -';
+    return;
+  }
+
+  const now = new Date(dateValue);
   document.getElementById('lastUpdated').textContent = `Last updated: ${now.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -508,7 +737,7 @@ function showToast(message, type = 'info') {
   toast.textContent = message;
   toast.className = `toast ${type} show`;
   clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3500);
 }
 
 function emptyRow(colspan, text) {
