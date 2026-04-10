@@ -55,7 +55,6 @@ function bindEvents() {
   addListener('exportBtn', 'click', exportTasks);
 
   addListener('openSettingsBtn', 'click', openSettingsModal);
-  addListener('openSettingsFromLogin', 'click', openSettingsModal);
   addListener('openSettingsBtnInline', 'click', openSettingsModal);
   addListener('testApiBtn', 'click', testConnection);
   addListener('closeSettingsModalBtn', 'click', closeSettingsModal);
