@@ -487,9 +487,12 @@ function renderRoadmapRow(task) {
       <div class="roadmap-track">
         <div class="roadmap-month-grid">${monthCells}</div>
         <div class="roadmap-bar-layer">
-          <div class="roadmap-bar ${statusClass} ${overdueClass}" style="grid-column:${startMonth} / span ${span};">
-            <span>${escapeHtml(task.partner || task.category || 'Task')}</span>
-          </div>
+          <div
+            class="roadmap-bar ${statusClass} ${overdueClass}"
+            style="grid-column:${startMonth} / span ${span};"
+            title="${escapeAttribute(task.taskName || '')}"
+            aria-label="${escapeAttribute(task.taskName || '')}"
+          ></div>
         </div>
       </div>
     </div>
