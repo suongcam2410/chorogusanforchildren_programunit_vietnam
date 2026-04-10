@@ -793,7 +793,7 @@ function emptyRow(colspan, text) {
 
 function renderAssignee(name) {
   if (!name) return '—';
-  return `<div class="assignee"><span class="avatar">${escapeHtml(getInitials(name))}</span><span>${escapeHtml(name)}</span></div>`;
+  return `<span>${escapeHtml(name)}</span>`;
 }
 
 function renderStatusBadge(status) {
