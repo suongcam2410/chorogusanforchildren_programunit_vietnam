@@ -481,7 +481,6 @@ function renderRoadmapRow(task) {
         </div>
         <div class="roadmap-task-bottom">
           <span>${escapeHtml(formatDateRange(task.startDate, task.endDate))}</span>
-          <span>${renderRiskBadge(task.risk)}</span>
         </div>
       </div>
       <div class="roadmap-track">
